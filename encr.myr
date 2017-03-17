@@ -20,62 +20,62 @@ const ctrinc = {ctx
 		else
 			carry = 0
 		;;
-		
+
 		ctx.buf[i] += 1
-		
+
 		if carry == 0
 			break
 		;;
-	;;	
+	;;
 }
 
 const hmac = {buf
 	// N.B. This HMAC is missing key extension because
 	// we already know the key size.
-	
+
 	var h1
 	var h2
-	
+
 	crypto.sha256init(&h1)
 	crypto.sha256init(&h2)
-	
+
 	var okeypad : byte[64]
 	var ikeypad : byte[64]
-	
+
 	std.slcp(okeypad[:], k[32:96])
 	std.slcp(ikeypad[:], k[32:96])
-	
+
 	for var i = 0; i < okeypad.len; i++
 		okeypad[i] ^= 0x5c
 	;;
-	
+
 	for var i = 0; i < ikeypad.len; i++
 		ikeypad[i] ^= 0x36
 	;;
-	
+
 	crypto.sha256add(&h1, ikeypad[:])
 	crypto.sha256add(&h1, buf)
 	crypto.sha256add(&h2, okeypad[:])
 	crypto.sha256add(&h2, 	crypto.sha256fin(&h1)[:])
-	
+
 	-> crypto.sha256fin(&h2)
 }
 
 const ctrencrypt = {buf
 	var encbuf : byte[32]
-	
+
 	std.slcp(encbuf[:], ctrctx.buf[:])
-	
+
 	for var i = 0; i < iv.len; i++
 		encbuf[i] ^= iv[i]
 	;;
-	
+
 	crypto.aesencrypt(&aesctx, encbuf[:], encbuf[:])
-	
+
 	for var i = 0; i < buf.len; i++
 		buf[i] ^= encbuf[i]
 	;;
-	
+
 	ctrinc(&ctrctx)
 }
 
@@ -92,19 +92,19 @@ $noret const die = {msg
 
 const loadkey = {keypath
 	var st : sys.statbuf
-	
+
 	if sys.stat(keypath, &st) != 0
 		die("could not stat key\n")
 	;;
-	
+
 	if st.mode & 0o007 != 0
 		die("rejecting world readable key\n")
 	;;
-	
-	if st.size != 96 
+
+	if st.size != 96
 		die("rejecting key file that is not 96 bytes\n")
 	;;
-	
+
 	match std.slurp(keypath)
 	| `std.Ok kbuf:
 		std.slcp(k[:], kbuf)
@@ -112,7 +112,7 @@ const loadkey = {keypath
 	| `std.Err _:
 		die("error reading key\n")
 	;;
-	
+
 	crypto.aeskeysched(&aesctx, k[0:32])
 }
 
@@ -135,13 +135,13 @@ const readin = {buf
 }
 
 const dogen = {keypath
-	
+
 	crypto.randbytes(k[:])
-	
+
 	if std.fexists(keypath)
 		die("key file already exists\n")
 	;;
-	
+
 	if !std.blat(keypath, k[:], 0o600)
 		die("error writing key\n")
 	;;
@@ -149,45 +149,45 @@ const dogen = {keypath
 
 const dodecrypt = {
 	var initbuf : byte[96]
-	
+
 	if readin(initbuf[:]) != initbuf.len
 		die("not enough data in stream\n")
 	;;
-	
+
 	if !std.sleq(initbuf[64:96], hmac(initbuf[0:64])[:])
 		die("stream init could not be authenticated\n")
 	;;
-	
+
 	std.slcp(iv[:], initbuf[0:32])
 	std.slcp(ctrctx.buf[:], initbuf[32:64])
-	
+
 	var done = false
-	
+
 	while !done
 		var blockbuf : byte[8192]
-	
+
 		if readin(blockbuf[:]) != blockbuf.len
 			die("not enough data for complete block!\n")
 		;;
-		
+
 		if !std.sleq(blockbuf[blockbuf.len-32:], hmac(blockbuf[0:blockbuf.len-32])[:])
 			die("block could not be authenticated\n")
 		;;
-		
+
 		if !std.sleq(blockbuf[0:32], ctrctx.buf[:])
 			die("blocks have been reordered\n")
 		;;
-		
+
 		var cipherbuf = blockbuf[32:blockbuf.len - 32]
 		var databuf = cipherbuf[2:]
-		
+
 		for var i = 0; i < cipherbuf.len; i+= 32
 			ctrencrypt(cipherbuf[i:i+32])
 		;;
-		
+
 		var n = ((cipherbuf[0] : int) << 0) | ((cipherbuf[1]&0x7f : int) << 8)
 		done = cipherbuf[1]&0x80 != 0
-		
+
 		writeout(databuf[:n])
 	;;
 }
@@ -195,49 +195,49 @@ const dodecrypt = {
 const doencrypt = {
 	crypto.randbytes(iv[:])
 	crypto.randbytes(ctrctx.buf[:])
-	
+
 	var initbuf : byte[96]
-	
+
 	std.slcp(initbuf[0:32], iv[:])
 	std.slcp(initbuf[32:64], ctrctx.buf[:])
 	std.slcp(initbuf[64:96], hmac(initbuf[0:64])[:])
-	
+
 	writeout(initbuf[:])
 
 	var done = false
-	
+
 	while !done
 		var blockbuf : byte [8192]
-	
+
 		std.slcp(blockbuf[0:32], ctrctx.buf[:])
-		
+
 		var cipherbuf = blockbuf[32:blockbuf.len - 32]
 		var databuf = cipherbuf[2:]
 		var n = readin(databuf)
-	
+
 		cipherbuf[0] = (n >> 0 : byte) & 0xff
 		cipherbuf[1] = (n >> 8 : byte) & 0xff
-	
+
 		if n != databuf.len
 			cipherbuf[1] |= 0x80
 			crypto.randbytes(databuf[n:])
 			done = true
 		;;
-		
+
 		for var i = 0; i < cipherbuf.len; i+= 32
 			ctrencrypt(cipherbuf[i:i+32])
 		;;
-	
+
 		std.slcp(blockbuf[blockbuf.len-32:], hmac(blockbuf[0:blockbuf.len-32])[:])
-	
+
 		writeout(blockbuf[:])
 	;;
 }
 
 const main = {args : byte[:][:]
-	
+
 	var keypath
-	
+
 	var cmd = std.optparse(args, &[
 		.argdesc = "[inputs...]",
 		.opts = [
@@ -246,11 +246,11 @@ const main = {args : byte[:][:]
 			[.opt='k', .arg="keyfile", .desc="96 byte key file to use for encryption and decryption/authentication"],
 		][:]
 	])
-	
+
 	var decrypt = false
 	var haskey = false
 	var gen = false
-	
+
 	for opt in cmd.opts
 		match opt
 		| ('g', ""):
@@ -268,20 +268,18 @@ const main = {args : byte[:][:]
 	if !haskey
 		die("please specify key with -k\n")
 	;;
-	
+
 	if gen
 		dogen(keypath)
 	else
 		loadkey(keypath)
-		
+
 		if decrypt
 			dodecrypt()
 		else
 			doencrypt()
 		;;
 	;;
-	
+
 	wipemem()
 }
-
-
