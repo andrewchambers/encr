@@ -9,7 +9,7 @@ SYNOPSIS
 
 DESCRIPTION
      encr encrypts or authenticates and decrypts (with -d) using a shared
-     96-bit key keyfile (provided via -k, or generated with -g and -k). Input
+     96-byte key keyfile (provided via -k, or generated with -g and -k). Input
      is passed via stdin, and output is printed to stdout.  encr buffers data
      into segments for processing and blocks if not enough data is provided,
      it is unsuitable for interactive encryption/decryption.
