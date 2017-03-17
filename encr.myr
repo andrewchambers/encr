@@ -12,18 +12,9 @@ type ctrctx = struct
 ;;
 
 const ctrinc = {ctx
-   	var carry
-
 	for var i = 0; i < 32; i++
-		if ctx.buf[i] == 0xff
-			carry = 1
-		else
-			carry = 0
-		;;
-
 		ctx.buf[i] += 1
-
-		if carry == 0
+		if ctx.buf[i] != 0
 			break
 		;;
 	;;
