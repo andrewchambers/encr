@@ -14,19 +14,19 @@ type ctrctx = struct
 const ctrinc = {ctx
    	var carry
 
-    for var i = 0; i < 32; i++
-        if ctx.buf[i] == 0xff
-            carry = 1
-        else
-            carry = 0
-        ;;
-        
-        ctx.buf[i] += 1
-        
-        if carry == 0
-            break
-        ;;
-    ;;	
+	for var i = 0; i < 32; i++
+		if ctx.buf[i] == 0xff
+			carry = 1
+		else
+			carry = 0
+		;;
+		
+		ctx.buf[i] += 1
+		
+		if carry == 0
+			break
+		;;
+	;;	
 }
 
 const hmac = {buf
@@ -36,8 +36,8 @@ const hmac = {buf
 	var h1
 	var h2
 	
-    crypto.sha256init(&h1)
-    crypto.sha256init(&h2)
+	crypto.sha256init(&h1)
+	crypto.sha256init(&h2)
 	
 	var okeypad : byte[64]
 	var ikeypad : byte[64]
@@ -46,11 +46,11 @@ const hmac = {buf
 	std.slcp(ikeypad[:], k[32:96])
 	
 	for var i = 0; i < okeypad.len; i++
-	    okeypad[i] ^= 0x5c
+		okeypad[i] ^= 0x5c
 	;;
 	
 	for var i = 0; i < ikeypad.len; i++
-	    ikeypad[i] ^= 0x36
+		ikeypad[i] ^= 0x36
 	;;
 	
 	crypto.sha256add(&h1, ikeypad[:])
@@ -67,13 +67,13 @@ const ctrencrypt = {buf
 	std.slcp(encbuf[:], ctrctx.buf[:])
 	
 	for var i = 0; i < iv.len; i++
-	    encbuf[i] ^= iv[i]
+		encbuf[i] ^= iv[i]
 	;;
 	
 	crypto.aesencrypt(&aesctx, encbuf[:], encbuf[:])
 	
 	for var i = 0; i < buf.len; i++
-	    buf[i] ^= encbuf[i]
+		buf[i] ^= encbuf[i]
 	;;
 	
 	ctrinc(&ctrctx)
@@ -94,7 +94,7 @@ const loadkey = {keypath
 	var st : sys.statbuf
 	
 	if sys.stat(keypath, &st) != 0
-	    die("could not stat key\n")
+		die("could not stat key\n")
 	;;
 	
 	if st.mode & 0o007 != 0
@@ -107,10 +107,10 @@ const loadkey = {keypath
 	
 	match std.slurp(keypath)
 	| `std.Ok kbuf:
-	    std.slcp(k[:], kbuf)
-	    std.slfree(kbuf)
+		std.slcp(k[:], kbuf)
+		std.slfree(kbuf)
 	| `std.Err _:
-	    die("error reading key\n")
+		die("error reading key\n")
 	;;
 	
 	crypto.aeskeysched(&aesctx, k[0:32])
@@ -119,32 +119,32 @@ const loadkey = {keypath
 const writeout = {buf
 	match std.writeall(std.Out, buf)
 	| (n, `std.None):
-	    -> n
+		-> n
 	| _:
-	    die("error wrtiting to stdout\n")
+		die("error wrtiting to stdout\n")
 	;;
 }
 
 const readin = {buf
 	match std.readall(std.In, buf)
 	| `std.Ok n:
-	    -> n
+		-> n
 	| `std.Err _:
-	    die("error reading from stdin\n")
+		die("error reading from stdin\n")
 	;;
 }
 
 const dogen = {keypath
-    
-    crypto.randbytes(k[:])
-    
-    if std.fexists(keypath)
-        die("key file already exists\n")
-    ;;
-    
-    if !std.blat(keypath, k[:], 0o600)
-        die("error writing key\n")
-    ;;
+	
+	crypto.randbytes(k[:])
+	
+	if std.fexists(keypath)
+		die("key file already exists\n")
+	;;
+	
+	if !std.blat(keypath, k[:], 0o600)
+		die("error writing key\n")
+	;;
 }
 
 const dodecrypt = {
@@ -182,7 +182,7 @@ const dodecrypt = {
 		var databuf = cipherbuf[2:]
 		
 		for var i = 0; i < cipherbuf.len; i+= 32
-		    ctrencrypt(cipherbuf[i:i+32])
+			ctrencrypt(cipherbuf[i:i+32])
 		;;
 		
 		var n = ((cipherbuf[0] : int) << 0) | ((cipherbuf[1]&0x7f : int) << 8)
@@ -225,7 +225,7 @@ const doencrypt = {
 		;;
 		
 		for var i = 0; i < cipherbuf.len; i+= 32
-		    ctrencrypt(cipherbuf[i:i+32])
+			ctrencrypt(cipherbuf[i:i+32])
 		;;
 	
 		std.slcp(blockbuf[blockbuf.len-32:], hmac(blockbuf[0:blockbuf.len-32])[:])
@@ -241,9 +241,9 @@ const main = {args : byte[:][:]
 	var cmd = std.optparse(args, &[
 		.argdesc = "[inputs...]",
 		.opts = [
-		    [.opt='d', .desc="decrypt instead of encrypt"],
-		    [.opt='g', .desc="generate a key file"],
-		    [.opt='k', .arg="keyfile", .desc="96 byte key file to use for encryption and decryption/authentication"],
+			[.opt='d', .desc="decrypt instead of encrypt"],
+			[.opt='g', .desc="generate a key file"],
+			[.opt='k', .arg="keyfile", .desc="96 byte key file to use for encryption and decryption/authentication"],
 		][:]
 	])
 	
@@ -270,16 +270,16 @@ const main = {args : byte[:][:]
 	;;
 	
 	if gen
-	    dogen(keypath)
+		dogen(keypath)
 	else
-	    loadkey(keypath)
-	    
-	    if decrypt
-	        dodecrypt()
-	    else
-	        doencrypt()
-	    ;;
-    ;;
+		loadkey(keypath)
+		
+		if decrypt
+			dodecrypt()
+		else
+			doencrypt()
+		;;
+	;;
 	
 	wipemem()
 }
