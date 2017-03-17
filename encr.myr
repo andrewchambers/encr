@@ -1,0 +1,183 @@
+use std
+use crypto
+
+var k : byte[64]
+var iv : byte[32]
+var ctrctx : ctrctx
+
+
+type ctrctx struct
+	buf : byte[32]
+;;
+
+const ctrinit = {ctx
+	std.slfill(ctx.buf, 0)
+}
+
+const ctrinc = {ctx
+	// XXX todo
+}
+
+const hmac = {in
+	// XXX todo
+	-> crypto.sha256(in)
+}
+
+const wipemem = {
+	std.slfill(ctrctx.buf, 0)
+	std.slfill(k, 0)
+}
+
+const die = {msg
+	wipemem()
+	std.die(msg)
+}
+
+const loadkey = {path
+	var st : sys.statbuf
+	
+	sys.stat(path, &st)
+	if st.mode & 0o007 != 0
+		die("rejecting world readable key\n")
+	;;
+	
+	if st.size != 64 
+		die("rejecting key file that is not 64 bytes\n")
+	;;
+	
+	// TODO limit reading to 64 bytes
+	// TODO terminate with die...
+	var kbuf = std.try(std.slurp(path))
+	std.slcp(k[:], kbuf[0:64])
+}
+
+const out = {buf
+	// XXX todo
+}
+
+const in = {buf
+	// XXX todo
+}
+
+const dodecrypt = {
+	var initbuf : byte[96]
+	
+	if in(initbuf[:]) != initbuf.len
+		die("not enough data in stream\n")
+	;;
+	if !std.sleq(initbuf[64:96], hmac(initbuf[0:64])[:])
+		die("stream init could not be authenticated\n")
+	;;
+	
+	std.slcp(iv[:], initbuf[0:32])
+	std.slcp(ctrctx.buf[:], initbuf[32:64])
+	
+	var done = false
+	
+	while !done
+		var blockbuf : byte[8192]
+	
+		if in(blockbuf) != blockbuf.len
+			die("not enough data for complete block!\n")
+		;;
+		
+		if !std.sleq(blockbuf[blockbuf.len-32:], hmac(blockbuf[0:blockbuf.len-32])[:])
+			die("block could not be authenticated\n")
+		;;
+		
+		if !std.sleq(blockbuf[0:32], ctrctx.buf[:])
+			die("blocks have been reordered\n")
+		;;
+		
+		// XXX		
+	;;
+}
+
+const doencrypt = {
+	crypto.randbytes(iv[:])
+	crypto.randbytes(ctrctx.buf[:])
+	
+	var initbuf : byte[96]
+	
+	std.slcp(initbuf[0:32], iv[:])
+	std.slcp(initbuf[32:64], ctrctx.buf[:])
+	std.slcp(initbuf[64:96], hmac(initbuf[0:64])[:])
+	
+	out(initbuf[:])
+
+	var done = false
+	
+	while !done
+		var blockbuf : byte [8192]
+	
+		std.slcp(blockbuf[0:32], iv[:])
+		
+		var cipherbuf = blockbuf[34:blockbuf.len - 34]
+		var n = in(cipherbuf)
+	
+		blockbuf[32] = (n >> 0) & 0xff
+		blockbuf[33] = (n >> 8) & 0xff
+	
+		if n != cipherbuf.len
+			blockbuf[33] |= 0x80
+			crypto.randbytes(cipherbuf[n:])
+			done = true
+		;;
+	
+		std.slcp(encrbuf[encrbuf.len-32:], hmac(encrbuf[0:encrbuf.len-32])[:])
+	
+		out(blockbuf[:])
+	;;
+}
+
+const main = {args : byte[:][:]
+	
+	var cmd = std.optparse(args, &[
+		.argdesc = "[inputs...]",
+		.opts = [
+		    [.opt='d', .desc="decrypt instead of encrypt"],
+		    [.opt='k', .arg="keyfile", .desc="64 byte key file to use for encryption"],
+		][:]
+	])
+	
+	var decrypt = false
+	var haskey = false
+	
+	for opt in cmd.opts
+		match opt
+		| ('d', ""):
+			decrypt = true
+		| ('k', path):
+			haskey = true
+			loadkey(path)
+		| _:
+			die("unreachable\n")
+		;;
+	;;
+
+	if !haskey
+		die("please specify key with -k\n")
+	;;
+	
+	if decrypt
+		dodecrypt()
+	else
+		doencrypt()
+	;;
+	
+	wipemem()
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
