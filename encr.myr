@@ -1,70 +1,159 @@
 use std
+use sys
 use crypto
 
-var k : byte[64]
+var k : byte[96]
 var iv : byte[32]
 var ctrctx : ctrctx
+var aesctx : crypto.aesctx
 
-
-type ctrctx struct
+type ctrctx = struct
 	buf : byte[32]
 ;;
 
-const ctrinit = {ctx
-	std.slfill(ctx.buf, 0)
-}
-
 const ctrinc = {ctx
-	// XXX todo
+   	var carry
+
+    for var i = 0; i < 32; i++
+        if ctx.buf[i] == 0xff
+            carry = 1
+        else
+            carry = 0
+        ;;
+        
+        ctx.buf[i] += 1
+        
+        if carry == 0
+            break
+        ;;
+    ;;	
 }
 
-const hmac = {in
-	// XXX todo
-	-> crypto.sha256(in)
+const hmac = {buf
+	// N.B. This HMAC is missing key extension because
+	// we already know the key size.
+	
+	var h1
+	var h2
+	
+    crypto.sha256init(&h1)
+    crypto.sha256init(&h2)
+	
+	var okeypad : byte[64]
+	var ikeypad : byte[64]
+	
+	std.slcp(okeypad[:], k[32:96])
+	std.slcp(ikeypad[:], k[32:96])
+	
+	for var i = 0; i < okeypad.len; i++
+	    okeypad[i] ^= 0x5c
+	;;
+	
+	for var i = 0; i < ikeypad.len; i++
+	    ikeypad[i] ^= 0x36
+	;;
+	
+	crypto.sha256add(&h1, ikeypad[:])
+	crypto.sha256add(&h1, buf)
+	crypto.sha256add(&h2, okeypad[:])
+	crypto.sha256add(&h2, 	crypto.sha256fin(&h1)[:])
+	
+	-> crypto.sha256fin(&h2)
+}
+
+const ctrencrypt = {buf
+	var encbuf : byte[32]
+	
+	std.slcp(encbuf[:], ctrctx.buf[:])
+	
+	for var i = 0; i < iv.len; i++
+	    encbuf[i] ^= iv[i]
+	;;
+	
+	crypto.aesencrypt(&aesctx, encbuf[:], encbuf[:])
+	
+	for var i = 0; i < buf.len; i++
+	    buf[i] ^= encbuf[i]
+	;;
+	
+	ctrinc(&ctrctx)
 }
 
 const wipemem = {
-	std.slfill(ctrctx.buf, 0)
-	std.slfill(k, 0)
+	std.slfill(ctrctx.buf[:], 0)
+	std.slfill(k[:], 0)
+	// XXX how to wipe aeskeyshed?
 }
 
-const die = {msg
+$noret const die = {msg
 	wipemem()
 	std.die(msg)
 }
 
-const loadkey = {path
+const loadkey = {keypath
 	var st : sys.statbuf
 	
-	sys.stat(path, &st)
+	if sys.stat(keypath, &st) != 0
+	    die("could not stat key\n")
+	;;
+	
 	if st.mode & 0o007 != 0
 		die("rejecting world readable key\n")
 	;;
 	
-	if st.size != 64 
-		die("rejecting key file that is not 64 bytes\n")
+	if st.size != 96 
+		die("rejecting key file that is not 96 bytes\n")
 	;;
 	
-	// TODO limit reading to 64 bytes
-	// TODO terminate with die...
-	var kbuf = std.try(std.slurp(path))
-	std.slcp(k[:], kbuf[0:64])
+	match std.slurp(keypath)
+	| `std.Ok kbuf:
+	    std.slcp(k[:], kbuf)
+	    std.slfree(kbuf)
+	| `std.Err _:
+	    die("error reading key\n")
+	;;
+	
+	crypto.aeskeysched(&aesctx, k[0:32])
 }
 
-const out = {buf
-	// XXX todo
+const writeout = {buf
+	match std.writeall(std.Out, buf)
+	| (n, `std.None):
+	    -> n
+	| _:
+	    die("error wrtiting to stdout\n")
+	;;
 }
 
-const in = {buf
-	// XXX todo
+const readin = {buf
+	match std.readall(std.In, buf)
+	| `std.Ok n:
+	    -> n
+	| `std.Err _:
+	    die("error reading from stdin\n")
+	;;
+}
+
+const dogen = {keypath
+    
+    crypto.randbytes(k[:])
+    
+    if std.fexists(keypath)
+        die("key file already exists\n")
+    ;;
+    
+    if !std.blat(keypath, k[:], 0o600)
+        die("error writing key\n")
+    ;;
 }
 
 const dodecrypt = {
 	var initbuf : byte[96]
 	
-	if in(initbuf[:]) != initbuf.len
+	if readin(initbuf[:]) != initbuf.len
 		die("not enough data in stream\n")
 	;;
+	
 	if !std.sleq(initbuf[64:96], hmac(initbuf[0:64])[:])
 		die("stream init could not be authenticated\n")
 	;;
@@ -77,7 +166,7 @@ const dodecrypt = {
 	while !done
 		var blockbuf : byte[8192]
 	
-		if in(blockbuf) != blockbuf.len
+		if readin(blockbuf[:]) != blockbuf.len
 			die("not enough data for complete block!\n")
 		;;
 		
@@ -89,7 +178,17 @@ const dodecrypt = {
 			die("blocks have been reordered\n")
 		;;
 		
-		// XXX		
+		var cipherbuf = blockbuf[32:blockbuf.len - 32]
+		var databuf = cipherbuf[2:]
+		
+		for var i = 0; i < cipherbuf.len; i+= 32
+		    ctrencrypt(cipherbuf[i:i+32])
+		;;
+		
+		var n = ((cipherbuf[0] : int) << 0) | ((cipherbuf[1]&0x7f : int) << 8)
+		done = cipherbuf[1]&0x80 != 0
+		
+		writeout(databuf[:n])
 	;;
 }
 
@@ -103,53 +202,64 @@ const doencrypt = {
 	std.slcp(initbuf[32:64], ctrctx.buf[:])
 	std.slcp(initbuf[64:96], hmac(initbuf[0:64])[:])
 	
-	out(initbuf[:])
+	writeout(initbuf[:])
 
 	var done = false
 	
 	while !done
 		var blockbuf : byte [8192]
 	
-		std.slcp(blockbuf[0:32], iv[:])
+		std.slcp(blockbuf[0:32], ctrctx.buf[:])
 		
-		var cipherbuf = blockbuf[34:blockbuf.len - 34]
-		var n = in(cipherbuf)
+		var cipherbuf = blockbuf[32:blockbuf.len - 32]
+		var databuf = cipherbuf[2:]
+		var n = readin(databuf)
 	
-		blockbuf[32] = (n >> 0) & 0xff
-		blockbuf[33] = (n >> 8) & 0xff
+		cipherbuf[0] = (n >> 0 : byte) & 0xff
+		cipherbuf[1] = (n >> 8 : byte) & 0xff
 	
-		if n != cipherbuf.len
-			blockbuf[33] |= 0x80
-			crypto.randbytes(cipherbuf[n:])
+		if n != databuf.len
+			cipherbuf[1] |= 0x80
+			crypto.randbytes(databuf[n:])
 			done = true
 		;;
+		
+		for var i = 0; i < cipherbuf.len; i+= 32
+		    ctrencrypt(cipherbuf[i:i+32])
+		;;
 	
-		std.slcp(encrbuf[encrbuf.len-32:], hmac(encrbuf[0:encrbuf.len-32])[:])
+		std.slcp(blockbuf[blockbuf.len-32:], hmac(blockbuf[0:blockbuf.len-32])[:])
 	
-		out(blockbuf[:])
+		writeout(blockbuf[:])
 	;;
 }
 
 const main = {args : byte[:][:]
 	
+	var keypath
+	
 	var cmd = std.optparse(args, &[
 		.argdesc = "[inputs...]",
 		.opts = [
 		    [.opt='d', .desc="decrypt instead of encrypt"],
-		    [.opt='k', .arg="keyfile", .desc="64 byte key file to use for encryption"],
+		    [.opt='g', .desc="generate a key file"],
+		    [.opt='k', .arg="keyfile", .desc="96 byte key file to use for encryption and decryption/authentication"],
 		][:]
 	])
 	
 	var decrypt = false
 	var haskey = false
+	var gen = false
 	
 	for opt in cmd.opts
 		match opt
+		| ('g', ""):
+			gen = true
 		| ('d', ""):
 			decrypt = true
 		| ('k', path):
 			haskey = true
-			loadkey(path)
+			keypath = path
 		| _:
 			die("unreachable\n")
 		;;
@@ -159,25 +269,19 @@ const main = {args : byte[:][:]
 		die("please specify key with -k\n")
 	;;
 	
-	if decrypt
-		dodecrypt()
+	if gen
+	    dogen(keypath)
 	else
-		doencrypt()
-	;;
+	    loadkey(keypath)
+	    
+	    if decrypt
+	        dodecrypt()
+	    else
+	        doencrypt()
+	    ;;
+    ;;
 	
 	wipemem()
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 

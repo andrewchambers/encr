@@ -1,0 +1,47 @@
+.Dd $Mdocdate: March 17 2017 $
+.Dt ENCR 1
+.Os
+.Sh NAME
+.Nm encr
+.Nd encrypt, authenticate and decrypt streams of data using a shared key.
+.Sh SYNOPSIS
+.Nm encr
+.Op Fl g
+.Op Fl d
+.Op Fl k Ar keyfile
+.Sh DESCRIPTION
+.Nm
+encrypts or authenticates and decrypts (with -d) using a shared 96-bit key
+.Ar keyfile
+(provided via -k). Input is passed via stdin, and output is printed to stdout.
+.Nm
+generates
+.Ar keyfile
+with the -g flag.
+.Pp
+.Nm
+protects confidentiality with AES-256 CTR encryption, and checks integrity and authenticity
+using HMAC with the SHA256 hash function.
+.Nm
+will not pass unauthenticated data to stdout, and aborts when given an unauthenticated,
+reordered or truncated data stream.
+.Pp
+.Nm
+aborts if
+.Ar keyfile
+is world accessible.
+.Sh EXIT STATUS
+.Ex -std encr
+.Sh EXAMPLE
+.Bd -literal
+
+generate a random key file:
+$ encr -g -k ./secret.key
+
+encrypt a plain text:
+$ encr -k ./secret.key < plain.txt > cipher.txt
+
+decrypt a cipher text:
+$ encr -d -k ./key.secret < cipher.txt > plain.txt
+
+.Ed
