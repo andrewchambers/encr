@@ -11,8 +11,8 @@ DESCRIPTION
      encr encrypts or authenticates and decrypts (with -d) using a shared
      96-bit key keyfile (provided via -k, or generated with -g and -k). Input
      is passed via stdin, and output is printed to stdout.  encr buffers data
-     into segments for processing and will block if not enough data is pro‐
-     vided, making it unsuitable for interactive encryption/decryption.
+     into segments for processing and blocks if not enough data is provided,
+     it is unsuitable for interactive encryption/decryption.
 
      encr protects confidentiality with AES-256 CTR encryption and checks
      integrity/authenticity using HMAC with the SHA256 hash function.  encr

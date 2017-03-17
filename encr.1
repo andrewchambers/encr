@@ -16,8 +16,8 @@ encrypts or authenticates and decrypts (with -d) using a shared 96-bit key
 (provided via -k, or generated with -g and -k). Input is passed via stdin,
 and output is printed to stdout.
 .Nm
-buffers data into segments for processing and will block if not enough data
-is provided, making it unsuitable for interactive encryption/decryption.
+buffers data into segments for processing and blocks if not enough data
+is provided, it is unsuitable for interactive encryption/decryption.
 .Pp
 .Nm
 protects confidentiality with AES-256 CTR encryption and checks integrity/authenticity
