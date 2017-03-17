@@ -9,13 +9,15 @@ SYNOPSIS
 
 DESCRIPTION
      encr encrypts or authenticates and decrypts (with -d) using a shared
-     96-bit key keyfile (provided via -k). Input is passed via stdin, and out‐
-     put is printed to stdout.  encr generates keyfile with the -g flag.
+     96-bit key keyfile (provided via -k, or generated with -g and -k). Input
+     is passed via stdin, and output is printed to stdout.  encr buffers data
+     into segments for processing and will block if not enough data is pro‐
+     vided, making it unsuitable for interactive encryption/decryption.
 
-     encr protects confidentiality with AES-256 CTR encryption, and checks
-     integrity and authenticity using HMAC with the SHA256 hash function.
-     encr will not pass unauthenticated data to stdout, and aborts when given
-     an unauthenticated, reordered or truncated data stream.
+     encr protects confidentiality with AES-256 CTR encryption and checks
+     integrity/authenticity using HMAC with the SHA256 hash function.  encr
+     will not pass unauthenticated data to stdout, and aborts when given an
+     unauthenticated, reordered or truncated data stream.
 
      encr aborts if keyfile is world accessible.
 
@@ -30,7 +32,7 @@ EXAMPLE
      $ encr -k ./secret.key < plain.txt > cipher.txt
 
      decrypt a cipher text:
-     $ encr -d -k ./key.secret < cipher.txt > plain.txt
+     $ encr -d -k ./secret.key < cipher.txt > plain.txt
 
 
 BSD                             March 17, 2017                             BSD

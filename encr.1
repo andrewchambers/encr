@@ -13,14 +13,14 @@
 .Nm
 encrypts or authenticates and decrypts (with -d) using a shared 96-bit key
 .Ar keyfile
-(provided via -k). Input is passed via stdin, and output is printed to stdout.
+(provided via -k, or generated with -g and -k). Input is passed via stdin,
+and output is printed to stdout.
 .Nm
-generates
-.Ar keyfile
-with the -g flag.
+buffers data into segments for processing and will block if not enough data
+is provided, making it unsuitable for interactive encryption/decryption.
 .Pp
 .Nm
-protects confidentiality with AES-256 CTR encryption, and checks integrity and authenticity
+protects confidentiality with AES-256 CTR encryption and checks integrity/authenticity
 using HMAC with the SHA256 hash function.
 .Nm
 will not pass unauthenticated data to stdout, and aborts when given an unauthenticated,
@@ -42,6 +42,6 @@ encrypt a plain text:
 $ encr -k ./secret.key < plain.txt > cipher.txt
 
 decrypt a cipher text:
-$ encr -d -k ./key.secret < cipher.txt > plain.txt
+$ encr -d -k ./secret.key < cipher.txt > plain.txt
 
 .Ed
