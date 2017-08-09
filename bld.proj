@@ -1,3 +1,2 @@
 bin encr = encr.myr;;
 man = encr.1;;
-gen readme.txt = sh -c "groff -t -e -mandoc -Tutf8 -Kutf8 encr.1 | col -bx > readme.txt";;
